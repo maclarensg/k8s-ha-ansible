@@ -5,7 +5,6 @@
   become: true
   gather_facts: true
   roles:
-    # - ssh-keys
     - kube-presetup
   vars:
     domain: mydomain.com
