@@ -1,0 +1,16 @@
+
+driftfile /var/lib/ntp/drift
+
+restrict -4 default nomodify nopeer noquery notrap
+restrict -6 default nomodify nopeer noquery notrap
+
+restrict 127.0.0.1 
+restrict -6 ::1
+
+server {{ ntpserver }}
+
+includefile /etc/ntp/crypto/pw
+
+keys /etc/ntp/keys
+
+

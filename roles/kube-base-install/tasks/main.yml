@@ -1,0 +1,40 @@
+---
+# tasks file for kube-install
+
+#- import_tasks: ubuntu.yml
+#  when: ansible_distribution == "Ubuntu"
+
+- import_tasks: centos.yml
+  when: ansible_distribution == "CentOS"
+
+- name: Setup docker daemon
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+  notify: restart docker
+
+- name: Disable SWAP since kubernetes can't work with swap enabled (1/2)
+  shell: |
+    swapoff -a
+  when: r_kubernetes_install.changed
+
+- name: Disable SWAP in fstab since kubernetes can't work with swap enabled (2/2)
+  replace:
+    path: /etc/fstab
+    regexp: '^([^#].*?\sswap\s.*)$'
+    replace: '# \1'
+  when: r_kubernetes_install.changed
+
+- name: 'add users to docker group'
+  user:
+    name: '{{ item }}'
+    groups: 'docker'
+    append: 'yes'
+  with_items: 
+    - eye-user
+
+- name: Install docker compose 
+  get_url:
+    url: "https://github.com/docker/compose/releases/download/{{docker_compose_version}}/docker-compose-{{ansible_system}}-{{ansible_machine}}" 
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'

@@ -1,0 +1,5 @@
+---
+# defaults file for kube-bootstrap
+networking: flannel
+pod_subnet: 10.244.0.0/16
+service_subnet: 10.96.0.0/12

@@ -1,0 +1,4 @@
+ansible_ssh_user: centos
+os: centos
+ansible_ssh_pass: letmein123
+ansible_become_password: letmein123

@@ -1,0 +1,39 @@
+---
+# tasks file for kube-presetup
+- name: ensure a list of packages installed
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages:
+      - net-tools
+      - telnet
+      - nc
+      
+- name: Set Hostname
+  hostname:
+    name: "{{inventory_hostname}}"
+
+- name: Ensure firewalld is up and enabled
+  systemd:
+    state: started
+    enabled: yes
+    name: firewalld
+    
+- name: Include search domain
+  lineinfile:
+    path: /etc/resolv.conf
+    regexp: '^search'
+    line: "search {{domain}}"
+
+- name: Install ntp 
+  yum: name=ntp state=present
+  tags: ntp
+
+- name: Configure ntp file
+  template: src=ntp.conf.j2 dest=/etc/ntp.conf
+  tags: ntp
+  notify: restart ntp
+
+- name: Start the ntp service
+  service: name=ntpd state=started enabled=yes
+  tags: ntp

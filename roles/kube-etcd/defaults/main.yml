@@ -1,0 +1,3 @@
+---
+# defaults file for kube-master
+domain: mydomain.com

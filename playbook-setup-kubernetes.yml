@@ -1,0 +1,96 @@
+# ======================
+#  Presetup
+# ======================
+- hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    # - ssh-keys
+    - kube-presetup
+  vars:
+    domain: mydomain.com
+  tags:
+    - presetup
+    - deploy
+  
+
+# ======================
+#  Firewall
+# ======================
+- hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - kube-firewall
+  tags:
+    - firewall
+    - deploy
+# ============================================================
+#  Base Installation - Install docker and kubernetes packages
+# ============================================================
+- hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - kube-base-install
+  vars:
+    centos_docker_version: 19.03.5-3.el7
+    docker_compose_version: 1.25.3
+  tags:
+    - installbase
+    - deploy
+
+# ===================================================
+#  Etcd - Install configure etcd cluster 
+# ===================================================
+- hosts: kube-master:etcd
+  become: true
+  gather_facts: true
+  roles:
+    - kube-etcd
+  vars:
+    etcd_version: v3.3.9
+    domain: mydomain.com
+  tags:
+    - etcd
+    - deploy
+
+# ===================================================
+#  Bootstrap Masters - bootstrap masters 
+# ===================================================    
+- hosts: kube-master:etcd
+  become: true
+  gather_facts: true
+  roles:
+    - kube-bootstrap-masters
+  vars:
+    primary_etcd_master: k8s-master-01
+    networking: flannel
+    users:
+      - eye-user
+      - centos
+    domain: mydomain.com
+    control_endpoint: k8s-master.mydomain.com
+  tags:
+    - bootstrapmasters
+    - deploy
+
+# ===================================================
+#  Bootstrap Masters - bootstrap masters 
+# ===================================================    
+- hosts: kube-master:kube-worker
+  become: true
+  gather_facts: true
+  roles:
+    - kube-bootstrap-workers
+  vars:
+    primary_etcd_master: k8s-master-01
+    users:
+      - eye-user
+      - centos
+  tags:
+    - bootstrapworkers
+    - deploy
+
+
+

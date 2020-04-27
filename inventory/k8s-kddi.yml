@@ -1,0 +1,38 @@
+all:
+  hosts:
+    k8s-master-01:
+      ansible_host: 192.168.188.81
+    k8s-master-02:
+      ansible_host: 192.168.188.82
+    k8s-master-03:
+      ansible_host: 192.168.188.83
+    worker-01:
+      ansible_host: 192.168.188.91
+    worker-02:  
+      ansible_host: 192.168.188.92
+  children:
+    centos:
+      hosts:
+        k8s-master-01:
+        k8s-master-02:
+        k8s-master-03:
+        worker-01:
+        worker-02:
+    kube-master:
+      hosts:
+        k8s-master-01:
+        k8s-master-02:
+        k8s-master-03:
+    kube-worker:
+      hosts:
+        worker-01:
+        worker-02:
+    etcd:
+      hosts:
+        k8s-master-01:
+        k8s-master-02:
+        k8s-master-03:
+    k8s-cluster:
+      children:
+        kube-master:
+        kube-node:

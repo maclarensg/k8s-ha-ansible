@@ -1,0 +1,7 @@
+---
+# handlers file for kube-presetup
+- name: restart iptables
+  service: name=iptables state=restarted
+
+- name: restart ntp
+  service: name=ntpd state=restarted

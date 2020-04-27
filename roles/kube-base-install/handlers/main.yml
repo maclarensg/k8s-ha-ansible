@@ -1,0 +1,7 @@
+---
+# handlers file for kube-master
+- name: restart docker
+  systemd:
+    name: docker
+    state: restarted
+    daemon_reload: yes

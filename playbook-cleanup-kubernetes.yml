@@ -1,0 +1,75 @@
+
+- hosts: kube-master:kube-worker
+  become: true
+  gather_facts: true
+  vars:
+    centos_docker_version: 19.03.5-3.el7
+    docker_compose_version: 1.25.3
+    etcd_version: v3.3.9
+  tasks:
+    - name: Reset kubeadm
+      block:
+        - name: Reset
+          shell: kubeadm reset -f
+          ignore_errors: yes
+    - name: Stop etcd
+      block:
+        - name: Stop and disable etcd
+          systemd:
+            name: etcd
+            state: stopped
+            enabled: no
+        - name: remove etcd datadir
+          file:
+            path: /var/lib/etcd
+            state: absent
+        - name: remove etcd binary
+          file:
+            path: "/opt/etcd-{{ etcd_version }}-linux-amd64"
+            state: absent
+        - name: remove etcd tar.gz
+          file:
+            path: "/opt/etcd-{{ etcd_version }}-linux-amd64.tar.gz"
+            state: absent  
+        - name: remove /etc/etcd
+          file:
+            path: /etc/etcd
+            state: absent       
+      when: inventory_hostname in groups['etcd']     
+    
+    - name: Remove kubernetes 
+      block:  
+        - name: remove kubernetes packages
+          yum:
+            name: 
+              - kubelet
+              - kubeadm
+              - kubectl
+            state: removed
+        - name: remove /etc/kubernetes
+          file:
+            path: /etc/kubernetes
+            state: absent     
+    
+    - name: Remove Docker
+      block:
+        - name: Remove Docker packages
+          yum:
+            name: 
+              - "docker-ce-{{ centos_docker_version }}"
+              - "docker-ce-cli-{{ centos_docker_version }}"
+              - containerd.io
+            state: removed
+        - name: remove /var/lib/docker
+          file:
+            path: /var/lib/docker
+            state: absent
+
+    - name: Remove interface 
+      block:  
+        - name: remove docker0
+          shell: ip link delete docker0
+        - name: remove flannel.1
+          shell: ip link delete flannel.1
+        - name: remove cni0
+          shell: ip link delete cni0

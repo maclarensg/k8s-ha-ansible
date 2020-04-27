@@ -1,0 +1,40 @@
+---
+- name: Add docker apt key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add docker repo
+  apt_repository:
+    repo: "deb https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: Install docker
+  apt:
+    name: "docker-ce={{ ubuntu_docker_version }}"
+    state: present
+
+- name: Add ubuntu to docker group
+  user:
+    name: ubuntu
+    groups: docker
+    append: yes
+
+- name: Add Google repository key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg 
+    state: present
+
+- name: Add kubernetes repo
+  apt_repository:
+    repo: "deb http://apt.kubernetes.io kubernetes-xenial main"
+    state: present
+
+- name: Install kubernetes pkg
+  apt:
+    pkg:
+      - kubelet
+      - kubeadm
+      - kubectl
+  register: r_kubernetes_install 
+

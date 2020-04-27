@@ -1,0 +1,76 @@
+---
+- name: install essentials
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages:
+    - yum-utils
+    - device-mapper-persistent-data
+    - lvm2
+- name: Stat docker repo
+  stat:
+    path: /etc/yum.repos.d/docker-ce.repo
+  register: r_docker_repo
+
+- name: Add docker repo
+  get_url:
+    url: https://download.docker.com/linux/centos/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+  when: r_docker_repo.stat.exists == False
+
+- name: Install docker
+  yum:
+    name: 
+      - "docker-ce-{{ centos_docker_version }}"
+      - "docker-ce-cli-{{ centos_docker_version }}"
+      - containerd.io
+    state: present
+
+- name: Add centos to docker group
+  user:
+    name: centos
+    groups: docker
+    append: yes
+
+- name: Start and enable docker
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Add kubernetes repo
+  template:
+    src: kubernetes.repo.j2
+    dest: /etc/yum.repos.d/kubernetes.repo
+    
+- name: Install kubernetes pkg
+  yum:
+    name:
+      - kubelet
+      - kubeadm
+      - kubectl
+  register: r_kubernetes_install 
+
+- name: Enable net.bridge.bridge-nf-call-iptables
+  sysctl:
+    name: net.bridge.bridge-nf-call-iptables 
+    value: '1'
+    state: present
+
+- name: Enable net.ipv4.ip_forward  
+  sysctl:
+    name: net.ipv4.ip_forward  
+    value: '1'
+    state: present
+
+- name: Enable net.bridge.bridge-nf-call-ip6tables 
+  sysctl:
+    name: net.bridge.bridge-nf-call-ip6tables 
+    value: '1'
+    state: present
+
+- name: Ensure kublet is enabled
+  systemd:
+    name: kubelet
+    enabled: yes
+    daemon_reload: yes

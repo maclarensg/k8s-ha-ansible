@@ -1,0 +1,112 @@
+---
+# tasks file for kube-master
+
+
+- name: Create etc directories
+  file: 
+    path: "{{item}}"
+    state: directory
+  with_items:
+    - /etc/etcd 
+    - /var/lib/etcd
+
+- name: copy pem files to etcd dir
+  copy:
+    src: "{{ item }}"
+    dest: /etc/etcd
+  with_items:
+    - ca.pem
+    - kubernetes-key.pem
+    - kubernetes.pem
+
+- name: stat etcd binaries
+  stat:
+    path: "/opt/etcd-{{ etcd_version }}-linux-amd64.tar.gz"
+  register: r_etcd_bin
+
+- name: Get etcd package
+  get_url: 
+    url: "https://github.com/coreos/etcd/releases/download/{{ etcd_version }}/etcd-{{ etcd_version }}-linux-amd64.tar.gz"
+    dest: "/opt/"
+  when: r_etcd_bin.stat.exists == False
+
+- name: Extract etcd package
+  unarchive:
+    src: "/opt/etcd-{{ etcd_version }}-linux-amd64.tar.gz"
+    dest: /opt/
+    remote_src: yes
+
+- name: Link binaries 
+  file:
+    src: "/opt/etcd-{{ etcd_version }}-linux-amd64/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+  with_items:
+    - etcd
+    - etcdctl
+
+# - name: Enable iptables (1)
+#   iptables:
+#     chain: INPUT
+#     protocol: tcp
+#     destination_port: "{{ item }}"
+#     jump: ACCEPT
+#   with_items: 
+#     - 2379
+#     - 2380
+#     - 6443
+#     - 10250
+#     - 10251
+#     - 10252
+#     - 10253
+#     - 10254
+#     - 10255
+#     - 6783
+#   #notify: save iptables
+
+# - name: Enable iptables (2)
+#   iptables:
+#     chain: INPUT
+#     protocol: udp
+#     destination_port: "{{ item }}"
+#     jump: ACCEPT
+#   with_items:
+#     - 8472
+#   notify: save iptables
+
+- name: Copy etcdctl.sh to /etc/profile.d/etcdctl.sh
+  copy:
+    src: etcdctl.sh
+    dest: /etc/profile.d/etcdctl.sh
+    mode: 0755
+
+- name: Create etcd unit file
+  template:
+    src: etcd.service.j2
+    dest: /etc/systemd/system/etcd.service
+  notify: restart etcd
+
+- name: Enable etcd
+  systemd:
+    name: etcd
+    state: started
+    enabled: yes
+    daemon_reload: yes    
+
+- name: Check etcd health status
+  shell: |
+    /usr/local/bin/etcdctl --cert-file /etc/etcd/kubernetes.pem --key-file /etc/etcd/kubernetes-key.pem --ca-file /etc/etcd/ca.pem --endpoint https://127.0.0.1:2379 cluster-health | grep healthy | wc -l
+  register: r_etcd_health
+  changed_when: no
+
+- name: ETCD's health
+  debug:
+    msg: "healthy? {{r_etcd_health.stdout | int - 1 == groups['etcd'] | length}}"
+  failed_when: r_etcd_health.stdout | int - 1 != groups['etcd'] | length
+
+
+  
+
+
+
+

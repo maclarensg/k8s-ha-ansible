@@ -1,0 +1,113 @@
+---
+- name: register kubelet version
+  shell: /usr/bin/kubelet --version
+  register: r_kubelet_version
+  changed_when: false
+
+- name: register fact
+  set_fact:
+    kubelet_version:  "{{r_kubelet_version.stdout.split(' ')[1]}}"
+  
+- name: copy kubeinit template
+  template:
+    src: config.yaml.j2
+    dest: /etc/kubernetes/config.yaml
+
+- name: Run task on master 1
+  block:
+    - name: stat file if kubeadm init should run
+      stat:
+        path: /etc/kubernetes/bootstrap.log
+      register: r_bootstrap
+      changed_when: false
+    - name: kubeadm init
+      shell: kubeadm init --config=/etc/kubernetes/config.yaml > /etc/kubernetes/bootstrap.log
+      when: r_bootstrap.stat.exists == false
+    - name: register join token
+      shell: grep -A1 "^kubeadm join" /etc/kubernetes/bootstrap.log
+      register: r_join_token_command
+      changed_when: false
+      ignore_errors: true
+    - name: debug
+      debug:
+        var: r_join_token_command
+    - name: fail the play when bootstrap fail
+      fail:
+        msg: "kubeinit fail on {{inventory_hostname}}, rm 'etc/kubernetes/bootstrap.log', ' rerun 'kubadm init --config=/etc/kubernetes/config.yaml> /etc/kubernetes/bootstrap.log' manually to debug"
+      when: r_join_token_command.rc > 0
+      any_errors_fatal: true
+    - name: "Add K8S Token and Hash to dummy host"
+      add_host:
+        name:   "K8S_TOKEN_HOLDER"
+        join_token_command:  "{{ r_join_token_command.stdout }}"        
+      changed_when: false
+    - name: register pki files
+      shell:  ls -d /etc/kubernetes/pki/*  | grep -v apiserver.*
+      register: r_pki_files
+      changed_when: false
+    - name: Fetch register pki files
+      fetch:
+        src: "{{item}}"
+        dest: "{{role_path}}/files/pki/"
+        flat: yes
+      with_items: "{{r_pki_files.stdout_lines}}"
+  when: inventory_hostname == primary_etcd_master
+
+- name: Run task of other masters
+  block:
+    - name: Print token command
+      debug:
+        msg: "{{inventory_hostname}} K8S_TOKEN_HOLDER K8S token is {{ hostvars['K8S_TOKEN_HOLDER']['join_token_command'] }}"
+    - name: Copy pki to other masters
+      copy:
+        src: pki/
+        dest: /etc/kubernetes/pki
+    - name: stat file if kubeadm init should run
+      stat:
+        path: /etc/kubernetes/bootstrap.log
+      register: r_bootstrap
+      changed_when: false
+    - name: other masters kubeadm init
+      shell: kubeadm init --config=/etc/kubernetes/config.yaml > /etc/kubernetes/bootstrap.log
+      when: r_bootstrap.stat.exists == false
+  when: inventory_hostname != primary_etcd_master
+  
+- name: Copy configuration file
+  block:
+    - name: create kubectl configuration directory
+      file:
+        path: "/home/{{item}}/.kube"
+        state: directory
+      with_items: "{{users}}"
+    - name: copy /etc/kubernetes/admin.conf to ~/.kube/config
+      copy:
+        src: /etc/kubernetes/admin.conf 
+        dest: "/home/{{item}}/.kube/config"
+        remote_src: yes
+      with_items: "{{users}}"
+
+- name: Apply overlay on master 1
+  block:
+    - name: Apply flannel overlay
+      block:
+        - name: Copy kube-flannel template
+          template:
+            src: kube-flannel.yml.j2
+            dest: /etc/kubernetes/kube-flannel.yml
+        - name: stat file if networking overlay should apply
+          stat:
+            path: /etc/kubernetes/networking.log
+          register: r_networking
+          changed_when: false
+        - name: Apply flannel networking
+          shell: kubectl --kubeconfig /etc/kubernetes/admin.conf  apply -f /etc/kubernetes/kube-flannel.yml  > /etc/kubernetes/networking.log
+          when: networking == "flannel" and r_networking.stat.exists == false
+      when: networking == 'flannel'
+  when: inventory_hostname == primary_etcd_master
+
+- name: Fetch kubeconfig
+  fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{role_path}}/../kube-bootstrap-workers/files/kubeconfig"
+    flat: yes
+    changed_when: false
